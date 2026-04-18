@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Social Preview Inspector</title>
+<meta name="description" content="Inspect and preview how any URL will look when shared on WhatsApp, Telegram, Facebook, X, LinkedIn, Discord and more.">
+<meta name="theme-color" content="#0077ff">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0%25' stop-color='%230077ff'/%3E%3Cstop offset='100%25' stop-color='%2300e0c6'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='32' height='32' rx='7' fill='url(%23g)'/%3E%3Cpath d='M17 7l-2 2v4l-4 4h5v4l2 2 2-2v-4l4-4h-5V9z' fill='%23fff' opacity='.4'/%3E%3Cpath d='M16 6l8 8-8 8-8-8zm0 3L10.5 14 16 19.5 21.5 14z' fill='%23fff'/%3E%3C/svg%3E">
+<style>
+:root {
+  --primary: #0077ff;
+  --accent: #00e0c6;
+  --gradient: linear-gradient(90deg, #0077ff, #00e0c6, #0077ff);
+  --radius-sm: 12px;
+  --radius-md: 20px;
+  --radius-lg: 28px;
+  --radius-pill: 50px;
+  --shadow-soft: 0 4px 15px rgba(0,0,0,0.15);
+  --shadow-lift: 0 12px 35px rgba(0,0,0,0.25);
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+[data-theme="dark"] {
+  --bg: #0a0a0a;
+  --bg-elev: #161618;
+  --glass-bg: rgba(22,22,24,0.72);
+  --glass-border: rgba(255,255,255,0.08);
+  --text: #f5f5f7;
+  --text-dim: #a1a1a6;
+  --text-muted: #6e6e73;
+  --border: rgba(255,255,255,0.1);
+  --input-bg: rgba(255,255,255,0.04);
+  --hover-bg: rgba(255,255,255,0.06);
+}
+[data-theme="light"] {
+  --bg: #f5f5f7;
+  --bg-elev: #ffffff;
+  --glass-bg: rgba(255,255,255,0.78);
+  --glass-border: rgba(0,0,0,0.06);
+  --text: #1d1d1f;
+  --text-dim: #515154;
+  --text-muted: #86868b;
+  --border: rgba(0,0,0,0.1);
+  --input-bg: rgba(0,0,0,0.03);
+  --hover-bg: rgba(0,0,0,0.04);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: var(--font); background: var(--bg); color: var(--text); min-height: 100vh; display: flex; font-weight: 500; transition: background 0.3s ease, color 0.3s ease; }
+
+/* Background ambient orbs */
+body::before, body::after {
+  content: ''; position: fixed; width: 500px; height: 500px; border-radius: 50%;
+  filter: blur(100px); opacity: 0.15; pointer-events: none; z-index: -1;
+  transition: opacity 0.3s ease;
+}
+body::before { background: var(--primary); top: -200px; left: -200px; }
+body::after { background: var(--accent); bottom: -200px; right: -200px; }
+[data-theme="light"] body::before, [data-theme="light"] body::after { opacity: 0.08; }
+
+/* ===== SIDEBAR ===== */
+#sidebar {
+  width: 340px; background: var(--glass-bg); backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border-right: 1px solid var(--glass-border);
+  display: flex; flex-direction: column;
+  position: sticky; top: 0; height: 100vh; overflow-y: auto;
+}
+#sidebar::-webkit-scrollbar { width: 6px; }
+#sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+#sidebar-header { padding: 22px 22px 18px; border-bottom: 1px solid var(--glass-border); }
+.logo { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+.logo-mark {
+  width: 32px; height: 32px; border-radius: 9px;
+  background: var(--gradient); background-size: 200% 100%;
+  display: flex; align-items: center; justify-content: center;
+  animation: shimmer 5s linear infinite;
+}
+.logo-mark svg { width: 18px; height: 18px; fill: #fff; }
+@keyframes shimmer { 0% { background-position: 0% 0; } 100% { background-position: 200% 0; } }
+.logo h1 { font-size: 1.05rem; font-weight: 700; letter-spacing: -0.3px; }
+.logo h1 .gr { background: var(--gradient); -webkit-background-clip: text; background-clip: text; color: transparent; background-size: 200% 100%; animation: shimmer 5s linear infinite; }
+.tagline { font-size: 0.72rem; color: var(--text-dim); font-weight: 500; line-height: 1.5; }
+
+/* URL input group */
+.input-section { padding: 16px 20px; border-bottom: 1px solid var(--glass-border); }
+.input-label { font-size: 0.68rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-dim); margin-bottom: 8px; display: block; }
+.input-row { display: flex; gap: 6px; }
+.url-input {
+  flex: 1; min-width: 0;
+  background: var(--input-bg); border: 1px solid var(--border); color: var(--text);
+  padding: 10px 14px; border-radius: var(--radius-sm);
+  font-family: var(--font); font-size: 0.8rem; font-weight: 500; outline: none;
+  transition: border-color 0.2s, background 0.2s;
+}
+.url-input:focus { border-color: var(--primary); background: var(--bg-elev); }
+
+.btn {
+  background: var(--primary); color: #fff; border: none;
+  padding: 10px 18px; border-radius: var(--radius-sm);
+  font-family: var(--font); font-weight: 600; font-size: 0.78rem;
+  cursor: pointer; transition: filter 0.2s, transform 0.1s;
+  white-space: nowrap; display: inline-flex; align-items: center; gap: 6px;
+}
+.btn:hover { filter: brightness(1.1); }
+.btn:active { transform: scale(0.97); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-ghost { background: transparent; color: var(--text); border: 1px solid var(--border); }
+.btn-ghost:hover { background: var(--hover-bg); filter: none; }
+.btn-pill { border-radius: var(--radius-pill); }
+
+.scan-actions { display: flex; gap: 6px; margin-top: 8px; }
+.scan-actions .btn { flex: 1; font-size: 0.72rem; padding: 8px 10px; justify-content: center; }
+
+/* Link list */
+.links-section { flex: 1; overflow-y: auto; padding: 14px 10px; }
+.links-section::-webkit-scrollbar { width: 6px; }
+.links-section::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+.links-header { display: flex; justify-content: space-between; align-items: center; padding: 0 10px; margin-bottom: 8px; }
+.links-header h3 { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-dim); }
+.links-count { font-size: 0.65rem; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+
+.link-item {
+  display: block; padding: 9px 12px; margin-bottom: 3px; border-radius: 10px;
+  cursor: pointer; font-size: 0.78rem; color: var(--text-dim);
+  transition: all 0.15s; border: 1px solid transparent;
+  background: none; width: 100%; text-align: left; font-family: var(--font);
+}
+.link-item:hover { background: var(--hover-bg); color: var(--text); }
+.link-item.active { background: rgba(0,119,255,0.12); color: var(--primary); border-color: rgba(0,119,255,0.25); font-weight: 600; }
+.link-item .item-url { display: block; font-size: 0.66rem; color: var(--text-muted); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+.link-item.active .item-url { color: rgba(0,119,255,0.65); }
+
+.empty-links { padding: 30px 16px; text-align: center; color: var(--text-muted); font-size: 0.8rem; line-height: 1.6; }
+
+/* Sidebar footer (theme toggle) */
+#sidebar-footer { padding: 14px 20px; border-top: 1px solid var(--glass-border); display: flex; align-items: center; gap: 8px; }
+.theme-toggle {
+  background: var(--input-bg); border: 1px solid var(--border); color: var(--text);
+  width: 36px; height: 36px; border-radius: 10px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.2s;
+}
+.theme-toggle:hover { background: var(--hover-bg); }
+.theme-toggle svg { width: 16px; height: 16px; }
+.credit { font-size: 0.65rem; color: var(--text-muted); margin-left: auto; }
+.credit a { color: var(--primary); text-decoration: none; }
+.credit a:hover { text-decoration: underline; }
+
+/* ===== MAIN ===== */
+#main { flex: 1; padding: 28px 36px; min-width: 0; }
+#main-header {
+  display: flex; justify-content: space-between; align-items: flex-start; gap: 20px;
+  margin-bottom: 24px; padding-bottom: 18px; border-bottom: 1px solid var(--border);
+}
+#main-header h2 { font-size: 1.3rem; font-weight: 700; letter-spacing: -0.3px; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.current-url { font-size: 0.75rem; color: var(--text-dim); margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+
+/* Loading / error / empty states */
+#loading, #empty-state { text-align: center; padding: 70px 20px; color: var(--text-dim); }
+#loading.active { display: block; } #loading { display: none; }
+.spinner { display: inline-block; width: 28px; height: 28px; border: 3px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 14px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+#empty-state h3 { font-size: 1.1rem; font-weight: 700; letter-spacing: -0.2px; margin-bottom: 10px; color: var(--text); }
+#empty-state p { font-size: 0.85rem; line-height: 1.7; max-width: 440px; margin: 0 auto; }
+#error-state { display: none; padding: 16px 18px; background: rgba(255,69,58,0.08); border: 1px solid rgba(255,69,58,0.25); border-radius: var(--radius-md); margin-bottom: 18px; color: #ff6b6b; font-size: 0.82rem; line-height: 1.6; }
+#error-state.active { display: block; }
+
+/* Meta info panel */
+.meta-info { padding: 16px 20px; border-radius: var(--radius-md); background: var(--glass-bg); border: 1px solid var(--glass-border); backdrop-filter: blur(15px); margin-bottom: 18px; }
+.meta-info h4 { font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-dim); margin-bottom: 12px; }
+.meta-row { display: flex; gap: 12px; font-size: 0.78rem; margin-bottom: 6px; align-items: flex-start; line-height: 1.5; }
+.meta-row .key { color: var(--text-dim); min-width: 100px; font-weight: 600; font-size: 0.7rem; letter-spacing: 0.2px; flex-shrink: 0; }
+.meta-row .val { color: var(--text); word-break: break-all; flex: 1; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.76rem; }
+.meta-row .val.missing { color: #ff6b6b; font-style: italic; font-family: var(--font); }
+#wa-warning { margin-top: 14px; padding: 12px 14px; background: rgba(255,149,0,0.08); border: 1px solid rgba(255,149,0,0.25); border-radius: var(--radius-sm); font-size: 0.78rem; color: #ff9f43; line-height: 1.6; }
+#wa-warning code { background: rgba(255,255,255,0.06); padding: 2px 6px; border-radius: 4px; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.72rem; }
+
+#preview-info { display: none; background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: var(--radius-md); padding: 14px 18px; margin-bottom: 20px; font-size: 0.76rem; color: var(--text-dim); line-height: 1.7; backdrop-filter: blur(15px); }
+#preview-info.active { display: block; }
+#preview-info strong { color: var(--text); font-weight: 600; }
+#preview-info code { background: var(--input-bg); padding: 2px 6px; border-radius: 4px; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.72rem; }
+
+/* Preview grid */
+#preview-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(440px, 1fr)); gap: 22px; }
+
+.social-card {
+  background: var(--bg-elev); border: 1px solid var(--border); border-radius: var(--radius-lg);
+  overflow: hidden; transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+}
+.social-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-lift); border-color: var(--primary); }
+.social-card-header { padding: 13px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 11px; }
+.social-card-header .icon { width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; overflow: hidden; }
+.social-card-header .icon svg { width: 19px; height: 19px; display: block; }
+.social-card-header .name { font-size: 0.78rem; font-weight: 700; letter-spacing: 0.2px; }
+.social-card-body { padding: 22px; background: #fff; }
+.social-card-body, .social-card-body * { color: initial; font-family: inherit; }
+
+/* Icon colors */
+.ic-whatsapp  { background: #25d366; }
+.ic-telegram  { background: #0088cc; }
+.ic-imessage  { background: #34c759; }
+.ic-signal    { background: #3a76f0; }
+.ic-skype     { background: #00aff0; }
+.ic-facebook  { background: #1877f2; }
+.ic-twitter   { background: #000; border: 1px solid #2f2f2f; }
+.ic-linkedin  { background: #0a66c2; }
+.ic-mastodon  { background: #6364ff; }
+.ic-bluesky   { background: #0085ff; }
+.ic-slack     { background: #fff; }
+.ic-slack svg { width: 21px; height: 21px; }
+.ic-discord   { background: #5865f2; }
+.ic-reddit    { background: #ff4500; }
+.ic-pinterest { background: #e60023; }
+.ic-google    { background: #fff; border: 1px solid rgba(0,0,0,0.08); }
+.ic-google svg { width: 21px; height: 21px; }
+
+/* ===== Per-social styles (copied from museo-shopify/social-preview-editor.html, unchanged) ===== */
+.sc-whatsapp .social-card-body { background: #e5ddd5; font-family: -apple-system, "Segoe UI", sans-serif; padding: 20px; }
+.wa-msg { background: #dcf8c6; border-radius: 8px; padding: 4px; max-width: 380px; position: relative; box-shadow: 0 1px 0.5px rgba(0,0,0,0.13); }
+.wa-msg::before { content: ''; position: absolute; top: 0; right: -8px; width: 0; height: 0; border-top: 8px solid #dcf8c6; border-right: 8px solid transparent; }
+.wa-msg-img { width: 100%; height: auto; display: block; border-radius: 6px 6px 0 0; background: #f0f0f0; }
+.wa-msg-card { background: rgba(0,0,0,0.06); padding: 8px 10px; border-left: 3px solid #25d366; border-radius: 0 0 6px 6px; }
+.wa-msg-card .title { font-size: 0.85rem; font-weight: 500; color: #111; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.wa-msg-card .desc { font-size: 0.75rem; color: #667781; margin-top: 2px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.wa-msg-card .url { font-size: 0.7rem; color: #667781; margin-top: 4px; }
+.wa-msg-link { padding: 6px 10px; font-size: 0.85rem; color: #039be5; word-break: break-all; }
+.wa-msg-time { font-size: 0.65rem; color: #667781; text-align: right; padding: 2px 8px 4px; display: flex; justify-content: flex-end; align-items: center; gap: 4px; }
+
+.sc-telegram .social-card-body { background: #17212b; padding: 20px; font-family: -apple-system, "Segoe UI", sans-serif; }
+.sc-telegram .social-card-body, .sc-telegram .social-card-body * { color: #fff; }
+.tg-msg { background: #2b5278; border-radius: 10px 10px 10px 0; padding: 8px 10px 6px; max-width: 440px; }
+.tg-msg-link { color: #6bb9f0; font-size: 0.82rem; word-break: break-all; margin-bottom: 6px; padding: 0 2px; }
+.tg-large { border-left: 3px solid #6bb9f0; padding-left: 10px; }
+.tg-large-site { font-size: 0.72rem; color: #6bb9f0; font-weight: 600; margin-bottom: 2px; }
+.tg-large-title { font-size: 0.88rem; font-weight: 600; color: #fff; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.tg-large-desc { font-size: 0.78rem; color: rgba(255,255,255,0.85); margin-top: 4px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.tg-large-img { width: 100%; height: auto; display: block; margin-top: 8px; border-radius: 6px; background: #1a2b3c; }
+.tg-msg-time { font-size: 0.65rem; color: rgba(255,255,255,0.5); text-align: right; padding: 4px 4px 0 0; }
+
+.sc-imessage .social-card-body { background: #000; padding: 30px 20px; font-family: -apple-system, "SF Pro Text", sans-serif; }
+.im-msg { background: #3b3b3d; border-radius: 18px; overflow: hidden; max-width: 320px; }
+.im-msg-img { width: 100%; height: auto; display: block; background: #1c1c1e; }
+.im-msg-meta { padding: 10px 14px; background: #2c2c2e; }
+.im-msg-title { color: #fff; font-size: 0.85rem; font-weight: 600; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.im-msg-desc { color: rgba(255,255,255,0.6); font-size: 0.75rem; margin-top: 2px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.im-msg-host { color: rgba(255,255,255,0.45); font-size: 0.7rem; margin-top: 4px; }
+
+.sc-signal .social-card-body { background: #121212; padding: 20px; font-family: -apple-system, "Roboto", sans-serif; }
+.sg-msg { background: #2c6bed; border-radius: 18px; padding: 8px 6px 8px 8px; max-width: 340px; display: inline-block; }
+.sg-card { background: rgba(0,0,0,0.1); border-radius: 12px; overflow: hidden; }
+.sg-card img { width: 100%; height: auto; display: block; }
+.sg-card-meta { padding: 8px 12px; }
+.sg-card-title { font-size: 0.85rem; font-weight: 600; color: #fff; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.sg-card-desc { font-size: 0.75rem; color: rgba(255,255,255,0.85); margin-top: 2px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.sg-card-host { font-size: 0.68rem; color: rgba(255,255,255,0.6); margin-top: 4px; }
+.sg-msg-link { color: #fff; font-size: 0.82rem; padding: 4px 8px 0; word-break: break-all; }
+
+.sc-skype .social-card-body { background: #f3f2f1; padding: 20px; font-family: "Segoe UI", system-ui, sans-serif; }
+.sk-msg { background: #fff; border-radius: 6px; overflow: hidden; max-width: 400px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+.sk-msg img { width: 100%; height: auto; display: block; background: #e1dfdd; }
+.sk-msg-meta { padding: 10px 14px; }
+.sk-msg-title { font-size: 0.88rem; font-weight: 600; color: #201f1e; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.sk-msg-desc { font-size: 0.78rem; color: #605e5c; margin-top: 4px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.sk-msg-host { font-size: 0.7rem; color: #8a8886; margin-top: 4px; }
+
+.sc-facebook .social-card-body { background: #f0f2f5; padding: 20px; font-family: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
+.fb-card { background: #fff; border: 1px solid #ced0d4; border-radius: 8px; overflow: hidden; max-width: 500px; }
+.fb-card-img { width: 100%; aspect-ratio: 1.91/1; background-color: #e4e6eb; object-fit: cover; display: block; }
+.fb-card-meta { padding: 10px 12px; background: #f2f3f5; }
+.fb-card-host { font-size: 0.72rem; color: #606770; text-transform: uppercase; margin-bottom: 4px; }
+.fb-card-title { font-size: 1rem; font-weight: 600; color: #1c1e21; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.fb-card-desc { font-size: 0.85rem; color: #606770; margin-top: 3px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+.sc-twitter .social-card-body { background: #000; padding: 20px; font-family: -apple-system, "Segoe UI", Helvetica, sans-serif; }
+.tw-card { border: 1px solid #2f3336; border-radius: 16px; overflow: hidden; max-width: 500px; cursor: pointer; }
+.tw-card-img { width: 100%; aspect-ratio: 1.91/1; background-color: #16181c; object-fit: cover; display: block; }
+.tw-card-meta { padding: 12px 14px; background: #000; border-top: 1px solid #2f3336; }
+.tw-card-title { font-size: 0.95rem; font-weight: 400; color: #e7e9ea; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; margin-bottom: 4px; }
+.tw-card-host { font-size: 0.82rem; color: #71767b; }
+
+.sc-linkedin .social-card-body { background: #f3f2ef; padding: 20px; font-family: -apple-system, system-ui, "Segoe UI", Roboto, sans-serif; }
+.li-card { background: #fff; border: 1px solid rgba(0,0,0,0.08); border-radius: 8px; overflow: hidden; max-width: 500px; }
+.li-card-img { width: 100%; aspect-ratio: 1.91/1; background-color: #e8e8e8; object-fit: cover; display: block; }
+.li-card-meta { padding: 12px 16px; }
+.li-card-title { font-size: 1rem; font-weight: 600; color: rgba(0,0,0,0.9); line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.li-card-host { font-size: 0.75rem; color: rgba(0,0,0,0.6); margin-top: 4px; }
+
+.sc-mastodon .social-card-body { background: #17191f; padding: 20px; font-family: mastodon-font-sans-serif, sans-serif; }
+.ms-card { max-width: 500px; background: #1f232b; border: 1px solid #393f4f; border-radius: 8px; overflow: hidden; display: flex; }
+.ms-card-img { width: 120px; flex-shrink: 0; background: #393f4f; background-size: cover; background-position: center; }
+.ms-card-meta { padding: 12px; flex: 1; min-width: 0; }
+.ms-card-host { font-size: 0.72rem; color: #8c93a3; text-transform: uppercase; margin-bottom: 4px; }
+.ms-card-title { font-size: 0.88rem; font-weight: 700; color: #fff; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.ms-card-desc { font-size: 0.8rem; color: #b9c1d1; margin-top: 4px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+.sc-bluesky .social-card-body { background: #fff; padding: 20px; font-family: -apple-system, "Segoe UI", sans-serif; }
+.bs-card { max-width: 480px; border: 1px solid #d4dbe2; border-radius: 8px; overflow: hidden; }
+.bs-card img { width: 100%; height: auto; display: block; background: #e8edf2; }
+.bs-card-meta { padding: 10px 14px; }
+.bs-card-host { font-size: 0.72rem; color: #50607a; margin-bottom: 2px; }
+.bs-card-title { font-size: 0.9rem; font-weight: 600; color: #0b0f19; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.bs-card-desc { font-size: 0.8rem; color: #4b5663; margin-top: 4px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+.sc-slack .social-card-body { background: #fff; padding: 20px; font-family: "Slack-Lato", sans-serif; }
+.sl-msg { max-width: 460px; font-size: 0.88rem; }
+.sl-link { color: #1264a3; font-size: 0.88rem; margin-bottom: 8px; }
+.sl-card { border-left: 4px solid #ddd; padding: 4px 12px; display: flex; gap: 12px; align-items: flex-start; }
+.sl-card-text { flex: 1; min-width: 0; }
+.sl-card-site { font-size: 0.75rem; color: #616061; font-weight: 700; margin-bottom: 2px; }
+.sl-card-title { font-size: 0.88rem; font-weight: 700; color: #1264a3; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.sl-card-desc { font-size: 0.82rem; color: #1d1c1d; margin-top: 4px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.sl-card-img { width: 80px; height: 80px; border-radius: 4px; background-size: cover; background-repeat: no-repeat; background-position: center; background-color: #f1f1f1; flex-shrink: 0; }
+
+.sc-discord .social-card-body { background: #313338; padding: 20px; font-family: "gg sans", "Noto Sans", Helvetica, sans-serif; }
+.ds-card { background: #2b2d31; border-left: 4px solid #5865f2; border-radius: 4px; padding: 10px 16px; max-width: 432px; }
+.ds-card-site { font-size: 0.75rem; color: #dbdee1; font-weight: 500; margin-bottom: 4px; }
+.ds-card-title { font-size: 0.95rem; font-weight: 600; color: #00a8fc; line-height: 1.3; margin-bottom: 4px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; cursor: pointer; }
+.ds-card-title:hover { text-decoration: underline; }
+.ds-card-desc { font-size: 0.82rem; color: #dbdee1; line-height: 1.4; margin-bottom: 10px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.ds-card-img { width: 100%; max-width: 400px; height: auto; display: block; background-color: #1e1f22; border-radius: 4px; }
+
+.sc-reddit .social-card-body { background: #1a1a1b; padding: 20px; font-family: "IBM Plex Sans", "Noto Sans", sans-serif; }
+.rd-card { background: #272729; border: 1px solid #343536; border-radius: 8px; overflow: hidden; display: flex; max-width: 540px; }
+.rd-card-text { flex: 1; padding: 14px 16px; min-width: 0; }
+.rd-card-title { font-size: 0.95rem; font-weight: 500; color: #d7dadc; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; margin-bottom: 6px; }
+.rd-card-host { font-size: 0.75rem; color: #818384; }
+.rd-card-img { width: 130px; flex-shrink: 0; background-size: cover; background-repeat: no-repeat; background-position: center; background-color: #1a1a1b; }
+
+.sc-pinterest .social-card-body { background: #fff; padding: 20px; font-family: -apple-system, "Segoe UI", sans-serif; }
+.pn-card { max-width: 236px; background: #fff; border-radius: 16px; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,0.15); border: 1px solid #efefef; }
+.pn-card img { width: 100%; height: auto; display: block; background: #efefef; }
+.pn-card-meta { padding: 10px 12px; }
+.pn-card-title { font-size: 0.85rem; font-weight: 600; color: #111; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.pn-card-host { font-size: 0.75rem; color: #767676; margin-top: 4px; }
+
+.sc-google .social-card-body { background: #fff; padding: 20px; font-family: arial, sans-serif; }
+.gg-result { max-width: 600px; }
+.gg-source { display: flex; align-items: center; gap: 12px; margin-bottom: 4px; }
+.gg-favicon { width: 26px; height: 26px; border-radius: 50%; background: #f1f3f4; display: flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink: 0; }
+.gg-favicon img { width: 18px; height: 18px; display: block; }
+.gg-source-info { display: flex; flex-direction: column; line-height: 1.3; min-width: 0; }
+.gg-source-name { font-size: 0.875rem; color: #202124; font-weight: 400; }
+.gg-source-url { font-size: 0.75rem; color: #4d5156; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gg-title { font-size: 1.25rem; color: #1a0dab; font-weight: 400; line-height: 1.3; cursor: pointer; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; margin-top: 2px; }
+.gg-title:hover { text-decoration: underline; }
+.gg-desc { font-size: 0.88rem; color: #4d5156; line-height: 1.5; margin-top: 4px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* Responsive */
+@media (max-width: 900px) {
+  body { flex-direction: column; }
+  #sidebar { position: relative; width: 100%; height: auto; max-height: 55vh; }
+  #main { padding: 20px; }
+  #preview-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<aside id="sidebar">
+  <div id="sidebar-header">
+    <div class="logo">
+      <div class="logo-mark"><svg viewBox="0 0 24 24"><path d="M13 3l-2 2v4l-4 4h5v4l2 2 2-2v-4l4-4h-5V5z" opacity=".4"/><path d="M12 2l8 8-8 8-8-8zm0 3L6.5 10 12 15.5 17.5 10z"/></svg></div>
+      <h1><span class="gr">Social</span> Preview Inspector</h1>
+    </div>
+    <p class="tagline">Paste any URL, preview how it will appear when shared on 15 platforms.</p>
+  </div>
+
+  <div class="input-section">
+    <label class="input-label" for="url-input">URL to inspect</label>
+    <div class="input-row">
+      <input type="text" class="url-input" id="url-input" placeholder="https://example.com" autocomplete="off" spellcheck="false">
+      <button class="btn" id="inspect-btn" onclick="inspectCurrent()">Inspect</button>
+    </div>
+    <div class="scan-actions">
+      <button class="btn btn-ghost" id="scan-btn" onclick="scanSite()">🔍 Scan site (find sub-pages)</button>
+    </div>
+  </div>
+
+  <div class="links-section">
+    <div class="links-header">
+      <h3 id="links-title">No scan yet</h3>
+      <span class="links-count" id="links-count"></span>
+    </div>
+    <div id="link-items">
+      <div class="empty-links">
+        Paste a URL above and click <strong>Inspect</strong> to preview,<br>
+        or <strong>Scan site</strong> to auto-discover up to 100 internal pages.
+      </div>
+    </div>
+  </div>
+
+  <div id="sidebar-footer">
+    <button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()" title="Toggle theme">
+      <svg id="theme-icon-moon" viewBox="0 0 24 24" fill="currentColor"><path d="M12.1 22c-.3 0-.6 0-.9-.1-4.9-.4-8.9-4.5-9.2-9.4-.3-4.1 1.9-7.9 5.5-9.7.5-.2 1 0 1.3.5.2.3.3.8.1 1.2-.7 1.5-1 3.2-.7 4.9.6 3.6 3.5 6.4 7.1 6.9 1.5.2 3-.1 4.3-.7.4-.2.9-.1 1.2.2.3.3.4.8.2 1.2-1.6 3.1-4.8 5-8.3 5h-.6z"/></svg>
+      <svg id="theme-icon-sun" viewBox="0 0 24 24" fill="currentColor" style="display:none"><path d="M12 7a5 5 0 100 10 5 5 0 000-10zM2 13h2a1 1 0 000-2H2a1 1 0 000 2zm18 0h2a1 1 0 000-2h-2a1 1 0 000 2zM11 2v2a1 1 0 002 0V2a1 1 0 00-2 0zm0 18v2a1 1 0 002 0v-2a1 1 0 00-2 0zM5.99 4.58a1 1 0 00-1.41 1.41l1.06 1.06a1 1 0 001.41-1.41L5.99 4.58zm12.37 12.37a1 1 0 00-1.41 1.41l1.06 1.06a1 1 0 001.41-1.41l-1.06-1.06zm1.06-10.96a1 1 0 00-1.41-1.41l-1.06 1.06a1 1 0 001.41 1.41l1.06-1.06zM7.05 18.36a1 1 0 00-1.41-1.41l-1.06 1.06a1 1 0 001.41 1.41l1.06-1.06z"/></svg>
+    </button>
+    <span class="credit">Open-source · <a href="https://github.com/" target="_blank" rel="noopener">GitHub</a></span>
+  </div>
+</aside>
+
+<main id="main">
+  <div id="main-header">
+    <div style="min-width:0; flex:1">
+      <h2 id="current-title">Nothing selected</h2>
+      <div class="current-url" id="current-url"></div>
+    </div>
+    <button class="btn btn-ghost btn-pill" id="refresh-btn" onclick="refreshCurrent()" disabled>↻ Refresh</button>
+  </div>
+
+  <div id="error-state"></div>
+
+  <div id="loading">
+    <div class="spinner"></div>
+    <div style="font-size:0.85rem">Fetching meta tags from the page…</div>
+  </div>
+
+  <div id="empty-state">
+    <h3>Start by pasting a URL</h3>
+    <p>Enter any public URL above to see exactly how it will render on WhatsApp, Telegram, Facebook, X, LinkedIn, Discord, iMessage, Signal, Skype, Slack, Reddit, Pinterest, Mastodon, Bluesky, and Google search results.</p>
+  </div>
+
+  <div id="meta-section" style="display:none" class="meta-info">
+    <h4>Detected meta tags</h4>
+    <div class="meta-row"><span class="key">og:title</span><span class="val" id="m-title"></span></div>
+    <div class="meta-row"><span class="key">og:description</span><span class="val" id="m-desc"></span></div>
+    <div class="meta-row"><span class="key">og:image</span><span class="val" id="m-image"></span></div>
+    <div class="meta-row"><span class="key">image info</span><span class="val" id="m-image-info">—</span></div>
+    <div class="meta-row"><span class="key">og:site_name</span><span class="val" id="m-site"></span></div>
+    <div class="meta-row"><span class="key">canonical</span><span class="val" id="m-url"></span></div>
+    <div id="wa-warning" style="display:none"></div>
+  </div>
+
+  <div id="preview-info">
+    💡 <strong>How to read these previews:</strong> <strong>WhatsApp, iMessage, Telegram (large), Discord, Signal, Skype, Bluesky, Mastodon</strong> adapt the card to the image's natural proportions (no crop). <strong>Facebook, X/Twitter, LinkedIn</strong> always crop to 1.91:1 (1200×630) — that's their policy. <strong>Slack, Reddit</strong> use square/rectangular center-cropped thumbs. <strong>Pinterest</strong> prefers vertical 1000×1500.<br>
+    ▶ <strong>Universal best practice:</strong> <code>og:image</code> 1200×630 JPG under 300 KB.
+  </div>
+
+  <div id="preview-grid"></div>
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
