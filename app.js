@@ -34,17 +34,37 @@ function updateThemeIcon(theme) {
 }
 
 // --- fetch helpers ---
-function fetchWithTimeout(url, ms) {
+// cache:'no-store' bypassa la HTTP cache del browser per i fetch
+// del proxy (i proxy cachano server-side, ma noi vogliamo ALMENO che
+// il browser non rappresenti vecchie risposte cachate dei proxy stessi).
+function fetchWithTimeout(url, ms, opts) {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), ms);
-    return fetch(url, { signal: ctrl.signal }).finally(() => clearTimeout(t));
+    const init = Object.assign({ signal: ctrl.signal, cache: 'no-store' }, opts || {});
+    return fetch(url, init).finally(() => clearTimeout(t));
+}
+
+// Append `_t=<now>` al URL target prima di passarlo al proxy:
+// forza i proxy CORS (corsproxy.io, allorigins, ecc.) a NON servire
+// risposte cachate. La QS extra e' invisibile al sito target ai fini
+// del rendering, e per la maggior parte dei siti statici (incluso
+// Caddy) restituisce comunque la stessa HTML.
+function bustUrl(url) {
+    try {
+        const u = new URL(url);
+        u.searchParams.set('_t', Date.now().toString(36));
+        return u.toString();
+    } catch (e) {
+        return url + (url.indexOf('?') === -1 ? '?' : '&') + '_t=' + Date.now().toString(36);
+    }
 }
 
 async function fetchViaProxies(url) {
     let lastErr = null;
+    const busted = bustUrl(url);
     for (const p of PROXIES) {
         try {
-            const resp = await fetchWithTimeout(p.url(url), FETCH_TIMEOUT_MS);
+            const resp = await fetchWithTimeout(p.url(busted), FETCH_TIMEOUT_MS);
             if (!resp.ok) { lastErr = new Error('HTTP ' + resp.status); continue; }
             if (p.raw) {
                 const text = await resp.text();
@@ -58,6 +78,23 @@ async function fetchViaProxies(url) {
         } catch (e) { lastErr = e; }
     }
     throw lastErr || new Error('All CORS proxies failed');
+}
+
+// Cache-buster per URL di immagini renderizzate negli <img>.
+// L'OG image del sito target e' servita con cache 'immutable' (1 anno):
+// senza buster, il browser tiene la versione vecchia anche dopo che il
+// sito aggiorna il file. Aggiungiamo un nonce per session (NON per fetch,
+// altrimenti ogni render fa download) cosi' un Refresh = nuova versione.
+let _imgBust = Date.now().toString(36);
+function bustImg(url) {
+    if (!url) return url;
+    try {
+        const u = new URL(url);
+        u.searchParams.set('_t', _imgBust);
+        return u.toString();
+    } catch (e) {
+        return url + (url.indexOf('?') === -1 ? '?' : '&') + '_t=' + _imgBust;
+    }
 }
 
 // --- URL normalization ---
@@ -185,12 +222,19 @@ async function loadUrl(url, forceRefresh) {
     document.getElementById('meta-section').style.display = 'none';
     document.getElementById('preview-info').classList.remove('active');
 
+    // Ogni "Inspect" o "Refresh" bumpa il nonce per le immagini renderizzate.
+    // Cosi' un click di Refresh forza il browser a riscaricare tutte le
+    // OG image dai vari <img>, bypassando la cache immutable=1y dei siti
+    // statici. Senza, vedevi sempre la stessa immagine "vecchia".
+    _imgBust = Date.now().toString(36);
+
     try {
-        let html = forceRefresh ? null : htmlCache.get(url);
-        if (!html) {
-            html = await fetchViaProxies(url);
-            htmlCache.set(url, html);
-        }
+        // SEMPRE fresh fetch: l'utente clicca "Inspect" aspettandosi
+        // di vedere lo stato corrente del sito, non una versione cachata.
+        // (Il `forceRefresh` resta accettato per backward-compat ma non
+        // cambia nulla, e' sempre forzato.)
+        const html = await fetchViaProxies(url);
+        htmlCache.set(url, html);
         if (fetchId !== currentFetchId) return;
 
         const meta = parseMetaTags(html, url);
@@ -284,8 +328,12 @@ async function inspectImage(url) {
     const info = document.getElementById('m-image-info');
     const img = new Image();
     let size = null;
+    // bustImg: forza fresh fetch dell'OG image, evita di leggere
+    // dalla disk cache del browser (siti statici servono OG con
+    // Cache-Control immutable=1y).
+    const bustedUrl = bustImg(url);
     try {
-        const resp = await fetchWithTimeout(url, 5000);
+        const resp = await fetchWithTimeout(bustedUrl, 5000);
         if (resp.ok) { const blob = await resp.blob(); size = blob.size; }
     } catch (e) { /* CORS: fine, we still get dimensions */ }
 
@@ -310,7 +358,7 @@ async function inspectImage(url) {
         info.textContent = '⚠️ image failed to load';
         showWarnings({ notLoadable: true });
     };
-    img.src = url;
+    img.src = bustedUrl;
 }
 
 function showWarnings(ctx) {
@@ -378,10 +426,14 @@ function renderAllPreviews(m) {
     document.getElementById('preview-info').classList.add('active');
     const grid = document.getElementById('preview-grid');
     grid.innerHTML = '';
+    // I renderer leggono m.image: usiamo una copia con l'URL bustato
+    // cosi' il browser non serve la vecchia immagine dalla disk cache
+    // dei siti statici con Cache-Control immutable.
+    const mForRender = Object.assign({}, m, { image: bustImg(m.image) });
     SOCIALS.forEach(s => {
         const card = document.createElement('div');
         card.className = 'social-card sc-' + s.key;
-        const body = RENDERERS[s.key](m);
+        const body = RENDERERS[s.key](mForRender);
         card.innerHTML =
             '<div class="social-card-header">' +
                 '<div class="icon ' + s.iconClass + '">' + (SOCIAL_SVG[s.key] || '') + '</div>' +
