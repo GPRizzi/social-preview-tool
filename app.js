@@ -1,11 +1,16 @@
 // ===== Social Preview Inspector - app logic =====
 
 // --- CORS proxies (fallback cascade) ---
+// Ordine aggiornato 2026-05-19: corsproxy.io e' diventato a pagamento
+// (HTTP 403 "Server-side requests not allowed on your plan"),
+// allorigins.win down (Cloudflare 520/522). codetabs e' l'unico
+// proxy gratuito stabile rimasto, va in cima. Gli altri stanno come
+// fallback se temporaneamente OK.
 const PROXIES = [
-    { url: (u) => 'https://corsproxy.io/?' + encodeURIComponent(u),                   raw: true  },
-    { url: (u) => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u),       raw: true  },
-    { url: (u) => 'https://api.codetabs.com/v1/proxy/?quest=' + encodeURIComponent(u), raw: true  },
-    { url: (u) => 'https://api.allorigins.win/get?url=' + encodeURIComponent(u),       raw: false }
+    { name: 'codetabs',         url: (u) => 'https://api.codetabs.com/v1/proxy/?quest=' + encodeURIComponent(u), raw: true  },
+    { name: 'allorigins-raw',   url: (u) => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u),       raw: true  },
+    { name: 'allorigins-json',  url: (u) => 'https://api.allorigins.win/get?url=' + encodeURIComponent(u),       raw: false },
+    { name: 'corsproxy.io',     url: (u) => 'https://corsproxy.io/?' + encodeURIComponent(u),                    raw: true  }
 ];
 const FETCH_TIMEOUT_MS = 8000;
 const MAX_LINKS = 100;
@@ -65,17 +70,32 @@ async function fetchViaProxies(url) {
     for (const p of PROXIES) {
         try {
             const resp = await fetchWithTimeout(p.url(busted), FETCH_TIMEOUT_MS);
-            if (!resp.ok) { lastErr = new Error('HTTP ' + resp.status); continue; }
+            if (!resp.ok) {
+                lastErr = new Error('HTTP ' + resp.status);
+                console.warn('[spi] proxy', p.name, 'failed:', resp.status);
+                continue;
+            }
             if (p.raw) {
                 const text = await resp.text();
-                if (text && text.length > 200) return text;
+                if (text && text.length > 200) {
+                    console.log('[spi] proxy', p.name, 'ok (' + text.length + ' chars)');
+                    return text;
+                }
                 lastErr = new Error('Empty response');
+                console.warn('[spi] proxy', p.name, 'empty body (' + (text ? text.length : 0) + ' chars)');
             } else {
                 const data = await resp.json();
-                if (data && data.contents) return data.contents;
+                if (data && data.contents) {
+                    console.log('[spi] proxy', p.name, 'ok (' + data.contents.length + ' chars json)');
+                    return data.contents;
+                }
                 lastErr = new Error('No contents in JSON');
+                console.warn('[spi] proxy', p.name, 'no contents in JSON');
             }
-        } catch (e) { lastErr = e; }
+        } catch (e) {
+            lastErr = e;
+            console.warn('[spi] proxy', p.name, 'threw:', e.message);
+        }
     }
     throw lastErr || new Error('All CORS proxies failed');
 }
